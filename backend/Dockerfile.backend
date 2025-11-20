@@ -1,0 +1,47 @@
+FROM python:3.12-slim
+
+# Install system dependencies including Java for Allure
+RUN apt-get update && apt-get install -y \
+    wget \
+    gnupg \
+    unzip \
+    curl \
+    lsb-release \
+    ca-certificates \
+    default-jre \
+    && mkdir -p /usr/share/keyrings \
+    && wget -q -O /usr/share/keyrings/google-linux-signing-keyring.gpg https://dl.google.com/linux/linux_signing_key.pub \
+    && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux-signing-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" \
+       > /etc/apt/sources.list.d/google-chrome.list \
+    && apt-get update \
+    && apt-get install -y google-chrome-stable fonts-freefont-ttf \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Allure CLI
+RUN wget -q https://github.com/allure-framework/allure2/releases/download/2.24.1/allure-2.24.1.tgz \
+    && tar -zxf allure-2.24.1.tgz -C /opt/ \
+    && ln -s /opt/allure-2.24.1/bin/allure /usr/bin/allure \
+    && rm allure-2.24.1.tgz
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for caching
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy app code
+COPY . .
+
+# Create directories for Allure
+RUN mkdir -p /app/allure-results /app/allure-reports
+
+# Expose port
+EXPOSE 8000
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Start FastAPI
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

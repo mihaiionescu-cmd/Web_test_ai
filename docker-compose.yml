@@ -1,0 +1,116 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:13
+    container_name: test-automation-db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: test_automation
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d test_automation"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Local LLaMA3.1 Model (8B) using Ollama
+  ollama:
+    build:
+      context: ./ollama
+      dockerfile: Dockerfile.ollama
+    container_name: local-llama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'         # maximum 4 CPUs
+          memory: 16g         # maximum 16 GB RAM
+        reservations:
+          cpus: '4.0'         # guarantee 2 CPUs
+          memory: 8g          # guarantee 8 GB RAM
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s http://localhost:11434/v1/models | grep 'llama3.1:8b' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  # Backend FastAPI Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.backend
+    container_name: test-automation-api
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://user:password@postgres:5432/test_automation
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-demo-key}
+      LOCAL_MODEL_URL: http://ollama:11434
+      LOCAL_MODEL_NAME: llama3.1:8b
+    volumes:
+      - ./allure-results:/app/allure-results
+      - ./allure-reports:/app/allure-reports
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend Angular Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+    container_name: test-automation-ui
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    volumes:
+      - ./allure-reports:/usr/share/nginx/html/allure-reports
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Allure Report Service
+  allure:
+    image: frankescobar/allure-docker-service:latest
+    container_name: allure-reporter
+    ports:
+      - "5050:5050"
+    environment:
+      CHECK_RESULTS_EVERY_SECONDS: 5
+      KEEP_HISTORY: 10
+    volumes:
+      - ./allure-results:/app/backend/allure-results
+      - ./allure-reports:/app/backend/allure-reports
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  ollama_data:
+
+networks:
+  default:
+    name: test-automation-network
