@@ -18,35 +18,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # Local LLaMA3.1 Model (8B) using Ollama
-  ollama:
-    build:
-      context: ./ollama
-      dockerfile: Dockerfile.ollama
-    container_name: local-llama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '4.0'         # maximum 4 CPUs
-          memory: 16g         # maximum 16 GB RAM
-        reservations:
-          cpus: '4.0'         # guarantee 2 CPUs
-          memory: 8g          # guarantee 8 GB RAM
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [ gpu ]
-    healthcheck:
-      test: ["CMD-SHELL", "curl -s http://localhost:11434/v1/models | grep 'llama3.1:8b' || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-
   # Backend FastAPI Service
   backend:
     build:
@@ -58,8 +29,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      ollama:
-        condition: service_started
     environment:
       DATABASE_URL: postgresql://user:password@postgres:5432/test_automation
       OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-demo-key}
