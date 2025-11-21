@@ -144,9 +144,16 @@ async def create_test_plan(url: str, num_cases: int, session_id: str) -> str:
     print(f"Session created: {session_id}")
 
     task_generate_tests = f"""
-    Generate {num_cases} test cases for {url}.
-    Call 'Save Test Cases' with session_id "{session_id}" and the JSON array of cases.
-    """
+      You are a QA automation engineer. Generate {num_cases} test cases for {url}.
+
+      Requirements:
+      - Each test case MUST have: id, title, description, steps (min 3)
+      - Focus on critical user flows
+
+      Call the 'Save Test Cases' tool with:
+      - session_id: "{session_id}"
+      - test_cases_json: JSON array of test cases
+      """
 
     agent = Agent(task=task_generate_tests, llm=llm, tools=tools, max_actions_per_step=1,
                   browser=Browser(headless=True, window_size={'width': 1920, 'height': 1080}))
