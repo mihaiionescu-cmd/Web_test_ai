@@ -189,11 +189,21 @@ async def execute_test_plan(session_id: str):
         print(f"Running Test {test_id}: {title}")
 
         task_execute_single = f"""
-        Execute the test, then call 'Update Test Case Status' once.
+        Execute THIS SINGLE TEST CASE and update database.
+
         Session ID: {session_id}
         Test ID: {test_id}
-        {steps}
+        Title: {title}
+        Description: {description}
+        Steps: {steps}
+        Target URL: {url}
+
+        Instructions:
+        1. Navigate to {url}
+        2. Execute steps
+        3. Call 'Update Test Case Status' ONCE
         """
+
 
         agent = Agent(task=task_execute_single, llm=llm, tools=tools, max_actions_per_step=1,
                       browser=Browser(headless=True, window_size={'width': 1920, 'height': 1080}))
